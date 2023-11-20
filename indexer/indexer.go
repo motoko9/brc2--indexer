@@ -105,11 +105,11 @@ func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) 
 		events := make([]db.Brc20Event, 0)
 		for _, event := range receipt.Events {
 			events = append(events, db.Brc20Event{
-				Brc20: event.Name,
-				Id:    event.Id,
-				Data1: event.Data[0],
-				Data2: event.Data[1],
-				Data3: event.Data[2],
+				Brc20:         event.Name,
+				InscriptionId: event.Id,
+				Data1:         event.Data[0],
+				Data2:         event.Data[1],
+				Data3:         event.Data[2],
 			})
 		}
 		brc20Receipts = append(brc20Receipts, &db.Brc20Receipt{

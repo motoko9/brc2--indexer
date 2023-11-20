@@ -34,7 +34,7 @@ func New(dao *db.Dao, name string) *State {
 		dao: dao,
 	}
 	s.info = &db.Brc20Info{
-		Tick: name,
+		Name: name,
 	}
 	s.balances = make(map[string]int64)
 	return s
@@ -72,7 +72,7 @@ func (s *State) Commit() {
 	balances := make([]*db.Brc20Balance, 0)
 	for address, balance := range s.balances {
 		balances = append(balances, &db.Brc20Balance{
-			Tick:    s.info.Tick,
+			Name:    s.info.Name,
 			Address: address,
 			Balance: balance,
 		})
