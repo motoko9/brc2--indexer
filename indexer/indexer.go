@@ -61,7 +61,7 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 		dao:       dao,
 	}
 	//
-	s := syncer.New(ordClient, btcClient, 779630, indexer, indexer.log)
+	s := syncer.New(ordClient, btcClient, 779832, indexer, indexer.log)
 	indexer.syncer = s
 	v := vm.New(indexer.log)
 	indexer.vm = v
@@ -96,15 +96,18 @@ func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) 
 	// todo batch
 	brc20Receipts := make([]*db.Brc20Receipt, 0)
 	brc20Transactions := make([]*db.Brc20Transaction, 0)
+	events := make([]*db.Brc20Event, 0)
 	for i, receipt := range receipts {
 		if receipt == nil {
 			continue
 		}
+		if receipt.Msg == "not support" {
+			continue
+		}
 		tx := txs[i]
 		//
-		events := make([]db.Brc20Event, 0)
 		for _, event := range receipt.Events {
-			events = append(events, db.Brc20Event{
+			events = append(events, &db.Brc20Event{
 				Brc20:         event.Name,
 				InscriptionId: event.Id,
 				Data1:         event.Data[0],
@@ -117,7 +120,7 @@ func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) 
 			InscriptionId: receipt.InscriptionId,
 			Status:        receipt.Status,
 			Msg:           receipt.Msg,
-			Events:        events,
+			//Events:        events,
 		})
 		brc20Transactions = append(brc20Transactions, &db.Brc20Transaction{
 			Hash:          tx.Hash,
@@ -132,6 +135,7 @@ func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) 
 	//
 	indexer.dao.Brc20Receipt().Save(brc20Receipts)
 	indexer.dao.Brc20Transaction().Save(brc20Transactions)
+	indexer.dao.Brc20Event().Save(events)
 
 	return nil
 }

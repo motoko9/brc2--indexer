@@ -83,7 +83,8 @@ func (syncer *Syncer) sync() bool {
 			}
 			//
 			brc20Tx := model.Transaction{
-				Hash: txid,
+				Hash:          txid,
+				InscriptionId: s.InscriptionId,
 				Input: model.Input{
 					Hash:    inputTxHash,
 					N:       inputTxN,

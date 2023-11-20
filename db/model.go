@@ -15,11 +15,11 @@ type Brc20Transaction struct {
 
 type Brc20Receipt struct {
 	gorm.Model    `json:"-"`
-	Hash          string       `json:"hash"`
-	InscriptionId string       `json:"inscription_id"`
-	Status        int          `json:"status"`
-	Msg           string       `json:"msg"`
-	Events        []Brc20Event `gorm:"foreignKey:ID" json:"events"`
+	Hash          string `json:"hash"`
+	InscriptionId string `json:"inscription_id"`
+	Status        int    `json:"status"`
+	Msg           string `json:"msg"`
+	//Events        []Brc20Event `gorm:"foreignKey:ID" json:"events"`
 }
 
 type Brc20Event struct {
@@ -34,11 +34,12 @@ type Brc20Event struct {
 }
 
 type Brc20Info struct {
-	gorm.Model `json:"-"`
-	Name       string
-	Maximum    int64
-	Limit      int64
-	Decimal    int64
+	gorm.Model  `json:"-"`
+	Name        string
+	Maximum     int64
+	Limit       int64
+	Decimal     int64
+	TotalSupply int64
 }
 
 type Brc20Balance struct {

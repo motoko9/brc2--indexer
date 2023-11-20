@@ -29,9 +29,9 @@ func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Rece
 		Msg:           "",
 	}
 	//
-	if transaction.Inscription.ContentType != "application/json" {
+	if transaction.Inscription.ContentType != "text/plain;charset=utf-8" {
 		receipt.Status = 0
-		receipt.Msg = "not support"
+		receipt.Msg = NotSupport
 		return receipt
 	}
 	//
@@ -39,19 +39,19 @@ func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Rece
 	err := json.Unmarshal(transaction.Inscription.Content, &r)
 	if err != nil {
 		receipt.Status = 0
-		receipt.Msg = "not support"
+		receipt.Msg = NotSupport
 		return receipt
 	}
 	//
 	if r.Proto != "brc-20" {
 		receipt.Status = 0
-		receipt.Msg = "not support"
+		receipt.Msg = NotSupport
 		return receipt
 	}
 	//
 	if r.Name != "ordi" {
 		receipt.Status = 0
-		receipt.Msg = "not support"
+		receipt.Msg = NotSupport
 		return receipt
 	}
 	s.Load(strings.ToLower(r.Name))
@@ -68,6 +68,8 @@ func (v *Vm) ExecuteBrc20(input *model.Input, output *model.Output, r *model.Con
 	case "transfer":
 		v.handleBrc20Transfer(input, output, r, s, receipt)
 	default:
+		receipt.Status = 0
+		receipt.Msg = InvalidFunction
 		return
 	}
 }
@@ -75,6 +77,8 @@ func (v *Vm) ExecuteBrc20(input *model.Input, output *model.Output, r *model.Con
 func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
 	name := strings.ToLower(r.Name)
 	if !s.IsEmpty(name) {
+		receipt.Status = 0
+		receipt.Msg = DuplicateResource
 		return
 	}
 	//
@@ -82,23 +86,32 @@ func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *mode
 	//
 	var err error
 	if r.Maximum == "" {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
 		return
 	}
+	maximum, err := strconv.ParseInt(r.Maximum, 10, 64)
+	if err != nil {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
+		return
+	}
+
 	decimal := int64(1)
 	if r.Decimal != "" {
 		decimal, err = strconv.ParseInt(r.Decimal, 10, 64)
 		if err != nil {
+			receipt.Status = 0
+			receipt.Msg = InvalidParameter
 			return
 		}
-	}
-	maximum, err := strconv.ParseInt(r.Maximum, 10, 64)
-	if err != nil {
-		return
 	}
 	limit := int64(math.MaxInt64)
 	if r.Limit != "" {
 		limit, err = strconv.ParseInt(r.Limit, 10, 64)
 		if err != nil {
+			receipt.Status = 0
+			receipt.Msg = InvalidParameter
 			return
 		}
 	}
@@ -124,20 +137,28 @@ func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *mode
 func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
 	name := strings.ToLower(r.Name)
 	if s.IsEmpty(name) {
+		receipt.Status = 0
+		receipt.Msg = UnknownResource
 		return
 	}
 	//
 	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
 		return
 	}
 	limit := s.Get("info:limit").(int64)
 	if amount > limit {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
 		return
 	}
 	maximum := s.Get("info:maximum").(int64)
 	totalSupply := s.Get("info:total_supply").(int64)
 	if totalSupply >= maximum {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
 		return
 	}
 	if totalSupply+amount > maximum {
@@ -163,6 +184,8 @@ func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *model.
 func (v *Vm) handleBrc20Transfer(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
 	name := strings.ToLower(r.Name)
 	if s.IsEmpty(name) {
+		receipt.Status = 0
+		receipt.Msg = UnknownResource
 		return
 	}
 	//
@@ -170,10 +193,17 @@ func (v *Vm) handleBrc20Transfer(input *model.Input, output *model.Output, r *mo
 	toAddress := output.Address
 	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
 		return
 	}
 	fromBalance := s.Get("balance:" + fromAddress).(int64)
 	toBalance := s.Get("balance:" + toAddress).(int64)
+	if fromBalance < amount {
+		receipt.Status = 0
+		receipt.Msg = InvalidParameter
+		return
+	}
 	s.Set("balance:"+fromAddress, fromBalance-amount)
 	s.Set("balance:"+toAddress, toBalance+amount)
 	//

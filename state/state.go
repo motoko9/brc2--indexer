@@ -13,7 +13,8 @@ type State struct {
 
 func New(dao *db.Dao) *State {
 	s := &State{
-		dao: dao,
+		dao:   dao,
+		brc20: make(map[string]*brc20.State),
 	}
 	return s
 }
@@ -29,13 +30,13 @@ func (s *State) Load(name string) {
 }
 
 func (s *State) IsEmpty(name string) bool {
-	_, ok := s.brc20[name]
-	return !ok
+	brc20, ok := s.brc20[name]
+	return !ok || brc20 == nil
 }
 
 func (s *State) Create(name string) {
-	_, ok := s.brc20[name]
-	if ok {
+	item, ok := s.brc20[name]
+	if ok && item != nil {
 		s.current = name
 		return
 	}

@@ -45,8 +45,16 @@ func (s *State) Get(key string) interface{} {
 	switch items[0] {
 	case "info":
 		switch items[1] {
+		case "name":
+			return s.info.Name
 		case "decimal":
 			return s.info.Decimal
+		case "maximum":
+			return s.info.Maximum
+		case "limit":
+			return s.info.Limit
+		case "total_supply":
+			return s.info.TotalSupply
 		}
 	case "balance":
 		return s.balances[items[1]]
@@ -59,8 +67,16 @@ func (s *State) Set(key string, value interface{}) {
 	switch items[0] {
 	case "info":
 		switch items[1] {
+		case "name":
+			s.info.Name = value.(string)
 		case "decimal":
 			s.info.Decimal = value.(int64)
+		case "maximum":
+			s.info.Maximum = value.(int64)
+		case "limit":
+			s.info.Limit = value.(int64)
+		case "total_supply":
+			s.info.TotalSupply = value.(int64)
 		}
 	case "balance":
 		s.balances[items[1]] = value.(int64)
