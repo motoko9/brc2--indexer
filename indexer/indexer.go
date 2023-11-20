@@ -47,6 +47,9 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 	if err != nil {
 		return nil
 	}
+	//
+	dbInstance.AutoMigrate(&db.Brc20Transaction{}, &db.Brc20Event{}, &db.Brc20Receipt{}, &db.Brc20Info{}, &db.Brc20Balance{}, &db.Inscription{})
+
 	dao := db.NewDao(dbInstance)
 	indexer := &Indexer{
 		ctx:       ctx,
