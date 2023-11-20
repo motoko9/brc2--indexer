@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/motoko9/model"
 	"github.com/motoko9/ord"
 	"strings"
@@ -8,18 +9,20 @@ import (
 )
 
 type Callback interface {
-	OnBrc20Transactions(height uint64, txs []*model.Brc20Transaction) error
+	OnBrc20Transactions(height uint64, txs []*model.Transaction) error
 }
 
 type Syncer struct {
 	ordClient *ord.Client
+	btcClient *rpcclient.Client
 	height    uint64
 	cb        Callback
 }
 
-func New(ordClient *ord.Client, height uint64, cb Callback) *Syncer {
+func New(ordClient *ord.Client, btcClient *rpcclient.Client, height uint64, cb Callback) *Syncer {
 	i := &Syncer{
 		ordClient: ordClient,
+		btcClient: btcClient,
 		height:    height,
 		cb:        cb,
 	}
@@ -36,7 +39,7 @@ func (i *Syncer) sync() bool {
 		return false
 	}
 	for i.height < latestHeight {
-		txs := make([]*model.Brc20Transaction, 0)
+		txs := make([]*model.Transaction, 0)
 		ids, err := i.ordClient.InscriptionsByBlock(i.height)
 		if err != nil {
 			return false
@@ -67,7 +70,7 @@ func (i *Syncer) sync() bool {
 				return false
 			}
 			//
-			brc20Tx := model.Brc20Transaction{
+			brc20Tx := model.Transaction{
 				Hash: txid,
 				Input: model.Input{
 					Hash:    inputTxHash,
@@ -98,9 +101,11 @@ func (i *Syncer) sync() bool {
 		}
 		//
 		if i.cb != nil {
-			i.cb.OnBrc20Transactions(i.height, txs)
+			if err := i.cb.OnBrc20Transactions(i.height, txs); err != nil {
+				return false
+			}
 		}
-		// todo, transaction
+		//
 		i.height++
 	}
 	return true

@@ -3,71 +3,86 @@ package vm
 import (
 	"encoding/json"
 	"github.com/motoko9/model"
+	"github.com/motoko9/state"
 	"math"
 	"strconv"
 	"strings"
 )
 
 type Vm struct {
-	states map[string]*Brc20
 }
 
 func New() *Vm {
-	vm := &Vm{
-		states: make(map[string]*Brc20),
-	}
+	vm := &Vm{}
 	return vm
 }
 
-func (v *Vm) Execute(transaction *model.Brc20Transaction) {
-	//
-	if transaction.Inscription.ContentType != "application/json" {
-		return
+func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Receipt {
+	receipt := &model.Receipt{
+		Hash:          transaction.Hash,
+		InscriptionId: transaction.InscriptionId,
+		Status:        0,
+		Msg:           "",
 	}
 	//
-	var r BRC20Content
+	if transaction.Inscription.ContentType != "application/json" {
+		receipt.Status = 0
+		receipt.Msg = "not support"
+		return receipt
+	}
+	//
+	var r Content
 	err := json.Unmarshal(transaction.Inscription.Content, &r)
 	if err != nil {
-		return
+		receipt.Status = 0
+		receipt.Msg = "not support"
+		return receipt
 	}
 	//
 	if r.Proto != "brc-20" {
-		return
+		receipt.Status = 0
+		receipt.Msg = "not support"
+		return receipt
 	}
 	//
 	if r.Tick != "ordi" {
-		return
+		receipt.Status = 0
+		receipt.Msg = "not support"
+		return receipt
 	}
-	v.ExecuteBrc20(&transaction.Input, &transaction.Output, &r)
+	s.Reload(strings.ToLower(r.Tick))
+	v.ExecuteBrc20(&transaction.Input, &transaction.Output, &r, s, receipt)
+	return receipt
 }
 
-func (v *Vm) ExecuteBrc20(input *model.Input, output *model.Output, r *BRC20Content) {
+func (v *Vm) ExecuteBrc20(input *model.Input, output *model.Output, r *Content, s *state.State, receipt *model.Receipt) {
 	switch r.Operation {
 	case "deploy":
-		v.handleBrc20Deploy(input, output, r)
+		v.handleBrc20Deploy(input, output, r, s, receipt)
 	case "mint":
-		v.handleBrc20Mint(input, output, r)
+		v.handleBrc20Mint(input, output, r, s, receipt)
 	case "transfer":
-		v.handleBrc20Transfer(input, output, r)
+		v.handleBrc20Transfer(input, output, r, s, receipt)
 	default:
 		return
 	}
 }
 
-func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *BRC20Content) {
+func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *Content, s *state.State, receipt *model.Receipt) {
 	brc20Ticker := strings.ToLower(r.Tick)
-	state, ok := v.states[brc20Ticker]
-	if ok {
+	if !s.IsEmpty() {
 		return
 	}
+	//
+	s.Create(brc20Ticker)
 	//
 	var err error
 	if r.Max == "" {
 		return
 	}
 	decimal := int64(1)
-	if r.BRC20Decimal != "" {
-		decimal, err = strconv.ParseInt(r.BRC20Decimal, 10, 64)
+	if r.Decimal != "" {
+		decimal, err = strconv.ParseInt(r.Decimal, 10, 64)
 		if err != nil {
 			return
 		}
@@ -83,61 +98,86 @@ func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *BRC2
 			return
 		}
 	}
-	state = &Brc20{
-		Tick:     brc20Ticker,
-		Deployer: input.Address,
-		info: Info{
-			Decimal:     decimal,
-			Max:         max,
-			Limit:       limit,
-			TotalSupply: 0,
-		},
-		balances: make(map[string]int64),
-	}
-	v.states[brc20Ticker] = state
+	//
+	s.Set("info:name", brc20Ticker)
+	s.Set("info:decimal", decimal)
+	s.Set("info:max", max)
+	s.Set("info:limit", limit)
+	s.Set("info:total_supply", int64(0))
+	//
+	receipt.Status = 1
+	event := make([]string, 5)
+	event[0] = "brc-20"
+	event[1] = brc20Ticker
+	event[2] = r.Decimal
+	event[3] = r.Max
+	event[4] = r.Limit
+	receipt.Events = append(receipt.Events, model.Event{
+		Id:   "deploy",
+		Data: event,
+	})
 }
 
-func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *BRC20Content) {
-	brc20Ticker := strings.ToLower(r.Tick)
-	state, ok := v.states[brc20Ticker]
-	if !ok {
+func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *Content, s *state.State, receipt *model.Receipt) {
+	if s.IsEmpty() {
 		return
 	}
 	//
-	amount, err := strconv.ParseInt(r.BRC20Amount, 10, 64)
+	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
 		return
 	}
-	if amount > state.info.Limit {
+	limit := s.Get("info:limit").(int64)
+	if amount > limit {
 		return
 	}
-	if state.info.TotalSupply >= state.info.Max {
+	max := s.Get("info:max").(int64)
+	totalSupply := s.Get("info:total_supply").(int64)
+	if totalSupply >= max {
 		return
 	}
-	if state.info.TotalSupply+amount > state.info.Max {
-		amount = state.info.Max - state.info.TotalSupply
+	if totalSupply+amount > max {
+		amount = max - totalSupply
 	}
 	//
-	state.info.TotalSupply += amount
-	state.balances[input.Address] = state.balances[input.Address] + amount
+	s.Set("info:total_supply", totalSupply+amount)
+	balance := s.Get("balance:" + input.Address).(int64)
+	s.Set("balance:"+input.Address, balance+amount)
+	//
+	receipt.Status = 1
+	event := make([]string, 2)
+	event[0] = input.Address
+	event[1] = input.Address
+	event[2] = r.Amount
+	receipt.Events = append(receipt.Events, model.Event{
+		Id:   "transfer",
+		Data: event,
+	})
 }
 
-func (v *Vm) handleBrc20Transfer(input *model.Input, output *model.Output, r *BRC20Content) {
-	brc20Ticker := strings.ToLower(r.Tick)
-	state, ok := v.states[brc20Ticker]
-	if !ok {
+func (v *Vm) handleBrc20Transfer(input *model.Input, output *model.Output, r *Content, s *state.State, receipt *model.Receipt) {
+	if s.IsEmpty() {
 		return
 	}
 	//
 	fromAddress := input.Address
 	toAddress := output.Address
-	amount, err := strconv.ParseInt(r.BRC20Amount, 10, 64)
+	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
 		return
 	}
-	if state.balances[fromAddress] < amount {
-		return
-	}
-	state.balances[fromAddress] = state.balances[fromAddress] - amount
-	state.balances[toAddress] = state.balances[toAddress] + amount
+	fromBalance := s.Get("balance:" + fromAddress).(int64)
+	toBalance := s.Get("balance:" + toAddress).(int64)
+	s.Set("balance:"+fromAddress, fromBalance-amount)
+	s.Set("balance:"+toAddress, toBalance+amount)
+	//
+	receipt.Status = 1
+	event := make([]string, 2)
+	event[0] = fromAddress
+	event[1] = toAddress
+	event[2] = r.Amount
+	receipt.Events = append(receipt.Events, model.Event{
+		Id:   "transfer",
+		Data: event,
+	})
 }

@@ -42,7 +42,7 @@ func TestClient_Inscriptions(t *testing.T) {
 }
 
 func TestClient_InscriptionsByBlock(t *testing.T) {
-	c := New("https://ordinals.com")
+	c := New("https://ordiscan.com")
 	inscriptions, err := c.InscriptionsByBlock(779630)
 	assert.NoError(t, err)
 	fmt.Printf("inscriptions: %v\n", inscriptions)

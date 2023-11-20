@@ -22,14 +22,28 @@ type Input struct {
 }
 
 type Output struct {
-	Value   int64
 	N       int64
 	Address string
+	Value   int64
 }
 
-type Brc20Transaction struct {
-	Hash        string `json:"hash"`
-	Input       Input  `json:"from"`
-	Output      Output `json:"to"`
-	Inscription Inscription
+type Transaction struct {
+	Hash          string `json:"hash"`
+	InscriptionId string `json:"inscription_id"`
+	Input         Input  `json:"from"`
+	Output        Output `json:"to"`
+	Inscription   Inscription
+}
+
+type Event struct {
+	Id   string
+	Data []string
+}
+
+type Receipt struct {
+	Hash          string  `json:"hash"`
+	InscriptionId string  `json:"inscription_id"`
+	Status        int     `json:"status"`
+	Msg           string  `json:"msg"`
+	Events        []Event `json:"events"`
 }
