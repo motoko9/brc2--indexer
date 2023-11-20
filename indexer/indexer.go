@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/hashicorp/go-hclog"
 	"github.com/motoko9/config"
 	"github.com/motoko9/db"
 	"github.com/motoko9/model"
@@ -17,6 +18,7 @@ import (
 
 type Indexer struct {
 	ctx       context.Context
+	log       hclog.Logger
 	ordClient *ord.Client
 	btcClient *rpcclient.Client
 	dao       *db.Dao
@@ -34,7 +36,7 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 		HTTPPostMode: true,
 	}, nil)
 	if err != nil {
-		return nil
+		panic(err)
 	}
 
 	//
@@ -45,7 +47,7 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 	}
 	dbInstance, err := gorm.Open(postgres.Open(cfg.Postgres.Connect), &gorm.Config{Logger: Logger})
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	//
 	dbInstance.AutoMigrate(&db.Brc20Transaction{}, &db.Brc20Event{}, &db.Brc20Receipt{}, &db.Brc20Info{}, &db.Brc20Balance{}, &db.Inscription{})
@@ -53,14 +55,15 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 	dao := db.NewDao(dbInstance)
 	indexer := &Indexer{
 		ctx:       ctx,
+		log:       hclog.L().Named("indexer"),
 		ordClient: ordClient,
 		btcClient: btcClient,
 		dao:       dao,
 	}
 	//
-	s := syncer.New(ordClient, btcClient, 779630, indexer)
+	s := syncer.New(ordClient, btcClient, 779630, indexer, indexer.log)
 	indexer.syncer = s
-	v := vm.New()
+	v := vm.New(indexer.log)
 	indexer.vm = v
 	return indexer
 }
@@ -73,12 +76,15 @@ func (indexer *Indexer) Service() {
 
 func (indexer *Indexer) Start() {
 	indexer.syncer.Start()
+	indexer.log.Info("indexer start successful......")
 }
 
 func (indexer *Indexer) Stop() {
 }
 
 func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) error {
+	indexer.log.Info("OnTransactions", "height", height, "transaction size", len(txs))
+	//
 	receipts := make([]*model.Receipt, len(txs))
 	s := state.New(indexer.dao)
 	for j, tx := range txs {

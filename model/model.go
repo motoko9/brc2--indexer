@@ -21,7 +21,7 @@ type Inscription struct {
 	GenesisFee        uint64 `json:"genesis_fee"`
 	GenesisHeight     uint64 `json:"genesis_height"`
 	InscriptionId     string `json:"inscription_id"`
-	InscriptionNumber uint64 `json:"inscription_number"`
+	InscriptionNumber int64  `json:"inscription_number"`
 	OutputValue       uint64 `json:"output_value"`
 	SatPoint          string `json:"satpoint"`
 	Timestamp         uint64 `json:"timestamp"`

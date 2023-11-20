@@ -2,6 +2,7 @@ package syncer
 
 import (
 	"github.com/btcsuite/btcd/rpcclient"
+	"github.com/hashicorp/go-hclog"
 	"github.com/motoko9/model"
 	"github.com/motoko9/ord"
 	"strings"
@@ -17,14 +18,16 @@ type Syncer struct {
 	btcClient *rpcclient.Client
 	height    uint64
 	cb        Callback
+	log       hclog.Logger
 }
 
-func New(ordClient *ord.Client, btcClient *rpcclient.Client, height uint64, cb Callback) *Syncer {
+func New(ordClient *ord.Client, btcClient *rpcclient.Client, height uint64, cb Callback, log hclog.Logger) *Syncer {
 	i := &Syncer{
 		ordClient: ordClient,
 		btcClient: btcClient,
 		height:    height,
 		cb:        cb,
+		log:       log.Named("syncer"),
 	}
 	return i
 }
@@ -36,22 +39,29 @@ func (syncer *Syncer) Start() {
 func (syncer *Syncer) sync() bool {
 	latestHeight, err := syncer.ordClient.BlockHeight()
 	if err != nil {
+		syncer.log.Error("ordClient.BlockHeight", "error", err)
 		return false
 	}
+	syncer.log.Info("sync", "latest height", latestHeight, "sync height", syncer.height)
 	for syncer.height < latestHeight {
+		syncer.log.Info("sync", "height", syncer.height)
+		//
 		txs := make([]*model.Transaction, 0)
 		ids, err := syncer.ordClient.InscriptionsByBlock(syncer.height)
 		if err != nil {
+			syncer.log.Error("ordClient.InscriptionsByBlock", "error", err)
 			return false
 		}
 		//
 		for _, id := range ids {
 			s, err := syncer.ordClient.InscriptionById(id)
 			if err != nil {
+				syncer.log.Error("ordClient.InscriptionById", "error", err)
 				return false
 			}
 			c, err := syncer.ordClient.InscriptionContent(id)
 			if err != nil {
+				syncer.log.Error("ordClient.InscriptionContent", "error", err)
 				return false
 			}
 			txid := s.InscriptionId[0:64]
@@ -59,6 +69,7 @@ func (syncer *Syncer) sync() bool {
 			//
 			tx, err := syncer.ordClient.Tx(txid)
 			if err != nil {
+				syncer.log.Error("ordClient.Tx", "error", err)
 				return false
 			}
 			// todo
@@ -67,6 +78,7 @@ func (syncer *Syncer) sync() bool {
 			inputTxN := MustUint64(items[1])
 			inputTx, err := syncer.ordClient.Tx(inputTxHash)
 			if err != nil {
+				syncer.log.Error("ordClient.Tx2", "error", err)
 				return false
 			}
 			//
@@ -102,6 +114,7 @@ func (syncer *Syncer) sync() bool {
 		//
 		if syncer.cb != nil {
 			if err := syncer.cb.OnTransactions(syncer.height, txs); err != nil {
+				syncer.log.Error("cb.OnTransactions", "error", err)
 				return false
 			}
 		}
@@ -118,6 +131,7 @@ func (syncer *Syncer) process() {
 				exit = false
 			}
 		}()
+		syncer.log.Info("syncer process start......")
 		ticker := time.NewTicker(time.Second * 1)
 		for {
 			select {

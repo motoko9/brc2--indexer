@@ -2,6 +2,7 @@ package vm
 
 import (
 	"encoding/json"
+	"github.com/hashicorp/go-hclog"
 	"github.com/motoko9/model"
 	"github.com/motoko9/state"
 	"math"
@@ -10,10 +11,13 @@ import (
 )
 
 type Vm struct {
+	log hclog.Logger
 }
 
-func New() *Vm {
-	vm := &Vm{}
+func New(log hclog.Logger) *Vm {
+	vm := &Vm{
+		log: log.Named("vm"),
+	}
 	return vm
 }
 
