@@ -9,7 +9,7 @@ import (
 )
 
 type Callback interface {
-	OnBrc20Transactions(height uint64, txs []*model.Transaction) error
+	OnTransactions(height uint64, txs []*model.Transaction) error
 }
 
 type Syncer struct {
@@ -29,35 +29,35 @@ func New(ordClient *ord.Client, btcClient *rpcclient.Client, height uint64, cb C
 	return i
 }
 
-func (i *Syncer) Start() {
-	go i.process()
+func (syncer *Syncer) Start() {
+	go syncer.process()
 }
 
-func (i *Syncer) sync() bool {
-	latestHeight, err := i.ordClient.BlockHeight()
+func (syncer *Syncer) sync() bool {
+	latestHeight, err := syncer.ordClient.BlockHeight()
 	if err != nil {
 		return false
 	}
-	for i.height < latestHeight {
+	for syncer.height < latestHeight {
 		txs := make([]*model.Transaction, 0)
-		ids, err := i.ordClient.InscriptionsByBlock(i.height)
+		ids, err := syncer.ordClient.InscriptionsByBlock(syncer.height)
 		if err != nil {
 			return false
 		}
 		//
 		for _, id := range ids {
-			s, err := i.ordClient.InscriptionById(id)
+			s, err := syncer.ordClient.InscriptionById(id)
 			if err != nil {
 				return false
 			}
-			c, err := i.ordClient.InscriptionContent(id)
+			c, err := syncer.ordClient.InscriptionContent(id)
 			if err != nil {
 				return false
 			}
 			txid := s.InscriptionId[0:64]
 			n := MustUint64(s.InscriptionId[65:])
 			//
-			tx, err := i.ordClient.Tx(txid)
+			tx, err := syncer.ordClient.Tx(txid)
 			if err != nil {
 				return false
 			}
@@ -65,7 +65,7 @@ func (i *Syncer) sync() bool {
 			items := strings.Split(tx.Inputs[0].Id, ":")
 			inputTxHash := items[0]
 			inputTxN := MustUint64(items[1])
-			inputTx, err := i.ordClient.Tx(inputTxHash)
+			inputTx, err := syncer.ordClient.Tx(inputTxHash)
 			if err != nil {
 				return false
 			}
@@ -100,18 +100,18 @@ func (i *Syncer) sync() bool {
 			txs = append(txs, &brc20Tx)
 		}
 		//
-		if i.cb != nil {
-			if err := i.cb.OnBrc20Transactions(i.height, txs); err != nil {
+		if syncer.cb != nil {
+			if err := syncer.cb.OnTransactions(syncer.height, txs); err != nil {
 				return false
 			}
 		}
 		//
-		i.height++
+		syncer.height++
 	}
 	return true
 }
 
-func (i *Syncer) process() {
+func (syncer *Syncer) process() {
 	process := func() (exit bool) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -122,7 +122,7 @@ func (i *Syncer) process() {
 		for {
 			select {
 			case <-ticker.C:
-				if !i.sync() {
+				if !syncer.sync() {
 					return
 				}
 			}
@@ -136,6 +136,6 @@ func (i *Syncer) process() {
 	}
 }
 
-func (s *Syncer) Height() uint64 {
-	return s.height
+func (syncer *Syncer) Height() uint64 {
+	return syncer.height
 }

@@ -1,5 +1,18 @@
 package model
 
+// Content
+// only for brc20 current
+//
+type Content struct {
+	Proto     string `json:"p,omitempty"`
+	Operation string `json:"op,omitempty"`
+	Name      string `json:"tick,omitempty"`
+	Maximum   string `json:"max,omitempty"`
+	Amount    string `json:"amt,omitempty"`
+	Limit     string `json:"lim,omitempty"` // option
+	Decimal   string `json:"dec,omitempty"` // option
+}
+
 type Inscription struct {
 	Address           string `json:"address"`
 	ContentLength     uint64 `json:"content_length"`
@@ -36,6 +49,7 @@ type Transaction struct {
 }
 
 type Event struct {
+	Name string
 	Id   string
 	Data []string
 }

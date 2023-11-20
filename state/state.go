@@ -6,9 +6,9 @@ import (
 )
 
 type State struct {
-	dao   *db.Dao
-	name  string
-	brc20 *brc20.State
+	dao     *db.Dao
+	current string
+	brc20   map[string]*brc20.State
 }
 
 func New(dao *db.Dao) *State {
@@ -18,27 +18,49 @@ func New(dao *db.Dao) *State {
 	return s
 }
 
-func (s *State) Reload(name string) {
-	s.name = name
-	s.brc20 = brc20.Load(s.dao, name)
+func (s *State) Load(name string) {
+	_, ok := s.brc20[name]
+	if ok {
+		s.current = name
+		return
+	}
+	s.brc20[name] = brc20.Load(s.dao, name)
+	s.current = name
 }
 
-func (s *State) IsEmpty() bool {
-	return s.brc20 == nil
+func (s *State) IsEmpty(name string) bool {
+	_, ok := s.brc20[name]
+	return !ok
 }
 
 func (s *State) Create(name string) {
-	s.brc20 = brc20.New(s.dao, name)
+	_, ok := s.brc20[name]
+	if ok {
+		s.current = name
+		return
+	}
+	s.brc20[name] = brc20.New(s.dao, name)
+	s.current = name
 }
 
 func (s *State) Set(key string, value interface{}) {
-	s.brc20.Set(key, value)
+	brc20, ok := s.brc20[s.current]
+	if !ok {
+		return
+	}
+	brc20.Set(key, value)
 }
 
 func (s *State) Get(key string) interface{} {
-	return s.brc20.Get(key)
+	brc20, ok := s.brc20[s.current]
+	if !ok {
+		return nil
+	}
+	return brc20.Get(key)
 }
 
 func (s *State) Commit() {
-
+	for _, brc20 := range s.brc20 {
+		brc20.Commit()
+	}
 }

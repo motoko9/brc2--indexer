@@ -8,14 +8,24 @@ type Brc20Transaction struct {
 	Content       []byte `json:"content"`
 	Timestamp     uint64 `json:"timestamp"`
 	Height        uint64 `json:"height"`
-	Status        int    `json:"status"`
-	Msg           string `json:"msg"`
+}
+
+type Brc20Receipt struct {
+	Hash          string       `json:"hash"`
+	InscriptionId string       `json:"inscription_id"`
+	Status        int          `json:"status"`
+	Msg           string       `json:"msg"`
+	Events        []Brc20Event `json:"events"`
 }
 
 type Brc20Event struct {
 	Brc20 string
 	Id    string
-	Data  []byte
+	Data1 string
+	Data2 string
+	Data3 string
+	Data4 string
+	Data5 string
 }
 
 type Brc20Info struct {

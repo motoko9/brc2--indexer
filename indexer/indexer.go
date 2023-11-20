@@ -21,7 +21,6 @@ type Indexer struct {
 	btcClient *rpcclient.Client
 	dao       *db.Dao
 	syncer    *syncer.Syncer
-	s         *state.State
 	vm        *vm.Vm
 }
 
@@ -49,49 +48,85 @@ func New(ctx context.Context, cfg *config.Config) *Indexer {
 		return nil
 	}
 	dao := db.NewDao(dbInstance)
-	i := &Indexer{
+	indexer := &Indexer{
 		ctx:       ctx,
 		ordClient: ordClient,
 		btcClient: btcClient,
 		dao:       dao,
 	}
 	//
-	s := syncer.New(ordClient, btcClient, 779630, i)
-	i.syncer = s
-	st := state.New(dao)
-	i.s = st
-	v := vm.New(st)
-	i.vm = v
-	return i
+	s := syncer.New(ordClient, btcClient, 779630, indexer)
+	indexer.syncer = s
+	v := vm.New()
+	indexer.vm = v
+	return indexer
 }
 
-func (i *Indexer) Service() {
-	i.Start()
-	<-i.ctx.Done()
-	i.Stop()
+func (indexer *Indexer) Service() {
+	indexer.Start()
+	<-indexer.ctx.Done()
+	indexer.Stop()
 }
 
-func (i *Indexer) Start() {
-	i.syncer.Start()
+func (indexer *Indexer) Start() {
+	indexer.syncer.Start()
 }
 
-func (i *Indexer) Stop() {
+func (indexer *Indexer) Stop() {
 }
 
-func (i *Indexer) OnBrc20Transactions(height uint64, txs []*model.Transaction) error {
-	receipt := make([]*model.Receipt, len(txs))
+func (indexer *Indexer) OnTransactions(height uint64, txs []*model.Transaction) error {
+	receipts := make([]*model.Receipt, len(txs))
+	s := state.New(indexer.dao)
 	for j, tx := range txs {
-		receipt[j] = i.vm.Execute(i.s, tx)
+		receipts[j] = indexer.vm.Execute(s, tx)
 	}
 	//
-	i.s.Commit()
-
+	s.Commit()
 	// save to db
 	// todo batch
+	brc20Receipts := make([]*db.Brc20Receipt, 0)
+	brc20Transactions := make([]*db.Brc20Transaction, 0)
+	for i, receipt := range receipts {
+		if receipt == nil {
+			continue
+		}
+		tx := txs[i]
+		//
+		events := make([]db.Brc20Event, 0)
+		for _, event := range receipt.Events {
+			events = append(events, db.Brc20Event{
+				Brc20: event.Name,
+				Id:    event.Id,
+				Data1: event.Data[0],
+				Data2: event.Data[1],
+				Data3: event.Data[2],
+			})
+		}
+		brc20Receipts = append(brc20Receipts, &db.Brc20Receipt{
+			Hash:          receipt.Hash,
+			InscriptionId: receipt.InscriptionId,
+			Status:        receipt.Status,
+			Msg:           receipt.Msg,
+			Events:        events,
+		})
+		brc20Transactions = append(brc20Transactions, &db.Brc20Transaction{
+			Hash:          tx.Hash,
+			InscriptionId: tx.InscriptionId,
+			ContentLength: tx.Inscription.ContentLength,
+			ContentType:   tx.Inscription.ContentType,
+			Content:       tx.Inscription.Content,
+			Timestamp:     tx.Inscription.Timestamp,
+			Height:        height,
+		})
+	}
+	//
+	indexer.dao.Brc20Receipt().Save(brc20Receipts)
+	indexer.dao.Brc20Transaction().Save(brc20Transactions)
 
 	return nil
 }
 
-func (i *Indexer) SyncerHeight() uint64 {
-	return i.syncer.Height()
+func (indexer *Indexer) SyncerHeight() uint64 {
+	return indexer.syncer.Height()
 }

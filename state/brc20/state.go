@@ -24,6 +24,8 @@ func Load(dao *db.Dao, name string) *State {
 	if info == nil {
 		return nil
 	}
+	s.info = info
+	s.balances = make(map[string]int64)
 	return s
 }
 
