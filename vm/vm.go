@@ -21,79 +21,80 @@ func New(log hclog.Logger) *Vm {
 	return vm
 }
 
-func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Receipt {
-	receipt := &model.Receipt{
-		Hash:          transaction.Hash,
-		InscriptionId: transaction.InscriptionId,
-		Status:        0,
-		Msg:           "",
-	}
-	//
+func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Context {
 	if transaction.Inscription.ContentType != "text/plain;charset=utf-8" {
-		receipt.Status = 0
-		receipt.Msg = NotSupport
-		return receipt
+		return nil
 	}
 	//
 	var r model.Content
 	err := json.Unmarshal(transaction.Inscription.Content, &r)
 	if err != nil {
-		receipt.Status = 0
-		receipt.Msg = NotSupport
-		return receipt
+		return nil
 	}
 	//
 	if r.Proto != "brc-20" {
-		receipt.Status = 0
-		receipt.Msg = NotSupport
-		return receipt
+		return nil
 	}
 	//
 	if r.Name != "ordi" {
-		receipt.Status = 0
-		receipt.Msg = NotSupport
-		return receipt
-	}
-	s.Load(strings.ToLower(r.Name))
-	v.ExecuteBrc20(&transaction.Input, &transaction.Output, &r, s, receipt)
-	return receipt
-}
-
-func (v *Vm) ExecuteBrc20(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
-	switch r.Operation {
-	case "deploy":
-		v.handleBrc20Deploy(input, output, r, s, receipt)
-	case "mint":
-		v.handleBrc20Mint(input, output, r, s, receipt)
-	case "transfer":
-		v.handleBrc20Transfer(input, output, r, s, receipt)
-	default:
-		receipt.Status = 0
-		receipt.Msg = InvalidFunction
-		return
-	}
-}
-
-func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
-	name := strings.ToLower(r.Name)
-	if !s.IsEmpty(name) {
-		receipt.Status = 0
-		receipt.Msg = DuplicateResource
-		return
+		return nil
 	}
 	//
-	s.Create(name)
+	c := &model.Context{
+		Output:      transaction.Output,
+		Inscription: transaction.Inscription,
+		Content:     r,
+		Status:      0,
+		Msg:         "",
+	}
+	v.ExecuteBrc20(c, s)
+	return c
+}
+
+func (v *Vm) ExecuteBrc20(c *model.Context, s *state.State) {
+	r := c.Content
+	switch r.Operation {
+	case "deploy":
+		v.handleBrc20Deploy(c, s)
+	case "mint":
+		v.handleBrc20Mint(c, s)
+	case "transfer":
+		v.handleBrc20Transfer(c, s)
+	default:
+		c.Status = 0
+		c.Msg = InvalidFunction
+		return
+	}
+}
+
+func (v *Vm) handleBrc20Deploy(c *model.Context, s *state.State) {
+	inscription := c.Inscription
+	if s.HasInscription(inscription.InscriptionId) {
+		c.Status = 0
+		c.Msg = DuplicateResource
+		return
+	}
+	output := c.Output
+	s.CreateInscription(inscription.InscriptionId, inscription.ContentLength, inscription.ContentType, inscription.Content, output.Address)
+	//
+	r := c.Content
+	name := strings.ToLower(r.Name)
+	if s.HasBr20(name) {
+		c.Status = 0
+		c.Msg = DuplicateResource
+		return
+	}
 	//
 	var err error
 	if r.Maximum == "" {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	maximum, err := strconv.ParseInt(r.Maximum, 10, 64)
 	if err != nil {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 
@@ -101,8 +102,8 @@ func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *mode
 	if r.Decimal != "" {
 		decimal, err = strconv.ParseInt(r.Decimal, 10, 64)
 		if err != nil {
-			receipt.Status = 0
-			receipt.Msg = InvalidParameter
+			c.Status = 0
+			c.Msg = InvalidParameter
 			return
 		}
 	}
@@ -110,55 +111,70 @@ func (v *Vm) handleBrc20Deploy(input *model.Input, output *model.Output, r *mode
 	if r.Limit != "" {
 		limit, err = strconv.ParseInt(r.Limit, 10, 64)
 		if err != nil {
-			receipt.Status = 0
-			receipt.Msg = InvalidParameter
+			c.Status = 0
+			c.Msg = InvalidParameter
 			return
 		}
 	}
 	//
+	s.CreateBrc20(r.Name)
+	s.SetCurrentBrc20(r.Name)
 	s.Set("info:name", name)
 	s.Set("info:decimal", decimal)
 	s.Set("info:maximum", maximum)
 	s.Set("info:limit", limit)
 	s.Set("info:total_supply", int64(0))
 	//
-	receipt.Status = 1
+	c.Status = 1
 	event := make([]string, 3)
 	event[0] = r.Decimal
 	event[1] = r.Maximum
 	event[2] = r.Limit
-	receipt.Events = append(receipt.Events, model.Event{
+	c.Event = model.Event{
 		Name: name,
 		Id:   "deploy",
 		Data: event,
-	})
+	}
 }
 
-func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
-	name := strings.ToLower(r.Name)
-	if s.IsEmpty(name) {
-		receipt.Status = 0
-		receipt.Msg = UnknownResource
+func (v *Vm) handleBrc20Mint(c *model.Context, s *state.State) {
+	inscription := c.Inscription
+	if s.HasInscription(inscription.InscriptionId) {
+		c.Status = 0
+		c.Msg = DuplicateResource
 		return
 	}
 	//
+	output := c.Output
+	s.CreateInscription(inscription.InscriptionId, inscription.ContentLength, inscription.ContentType, inscription.Content, output.Address)
+	//
+	r := c.Content
+	name := strings.ToLower(r.Name)
+	if !s.HasBr20(name) {
+		c.Status = 0
+		c.Msg = UnknownResource
+		return
+	}
+	//
+	s.SetCurrentBrc20(r.Name)
+	//
 	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	limit := s.Get("info:limit").(int64)
 	if amount > limit {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	maximum := s.Get("info:maximum").(int64)
 	totalSupply := s.Get("info:total_supply").(int64)
 	if totalSupply >= maximum {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	if totalSupply+amount > maximum {
@@ -166,55 +182,95 @@ func (v *Vm) handleBrc20Mint(input *model.Input, output *model.Output, r *model.
 	}
 	//
 	s.Set("info:total_supply", totalSupply+amount)
-	balance := s.Get("balance:" + input.Address).(int64)
-	s.Set("balance:"+input.Address, balance+amount)
+	balance := s.Get("balance:" + output.Address).(int64)
+	s.Set("balance:"+output.Address, balance+amount)
 	//
-	receipt.Status = 1
+	c.Status = 1
 	event := make([]string, 3)
-	event[0] = input.Address
-	event[1] = input.Address
+	event[0] = output.Address
+	event[1] = output.Address
 	event[2] = r.Amount
-	receipt.Events = append(receipt.Events, model.Event{
+	c.Event = model.Event{
 		Name: name,
 		Id:   "transfer",
 		Data: event,
-	})
+	}
 }
 
-func (v *Vm) handleBrc20Transfer(input *model.Input, output *model.Output, r *model.Content, s *state.State, receipt *model.Receipt) {
+func (v *Vm) handleBrc20Transfer(c *model.Context, s *state.State) {
+	inscription := c.Inscription
+	if !s.HasInscription(inscription.InscriptionId) {
+		v.handleBrc20TransferStep1(c, s)
+		return
+	} else {
+		v.handleBrc20TransferStep2(c, s)
+		return
+	}
+}
+
+func (v *Vm) handleBrc20TransferStep1(c *model.Context, s *state.State) {
+	//
+	inscription := c.Inscription
+	output := c.Output
+	s.CreateInscription(inscription.InscriptionId, inscription.ContentLength, inscription.ContentType, inscription.Content, output.Address)
+	//
+	r := c.Content
 	name := strings.ToLower(r.Name)
-	if s.IsEmpty(name) {
-		receipt.Status = 0
-		receipt.Msg = UnknownResource
+	if !s.HasBr20(name) {
+		c.Status = 0
+		c.Msg = UnknownResource
 		return
 	}
 	//
-	fromAddress := input.Address
+	c.Status = 1
+}
+
+func (v *Vm) handleBrc20TransferStep2(c *model.Context, s *state.State) {
+	//
+	inscription := c.Inscription
+	number := s.IncreaseInscriptionNumber(inscription.InscriptionId)
+	output := c.Output
+	oldOwner := s.SetNewOwner(inscription.InscriptionId, output.Address)
+	if number != 1 {
+		c.Status = 0
+		c.Msg = DuplicateResource
+		return
+	}
+	//
+	r := c.Content
+	name := strings.ToLower(r.Name)
+	if !s.HasBr20(name) {
+		c.Status = 0
+		c.Msg = UnknownResource
+		return
+	}
+	//
+	fromAddress := oldOwner
 	toAddress := output.Address
 	amount, err := strconv.ParseInt(r.Amount, 10, 64)
 	if err != nil {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	fromBalance := s.Get("balance:" + fromAddress).(int64)
 	toBalance := s.Get("balance:" + toAddress).(int64)
 	if fromBalance < amount {
-		receipt.Status = 0
-		receipt.Msg = InvalidParameter
+		c.Status = 0
+		c.Msg = InvalidParameter
 		return
 	}
 	s.Set("balance:"+fromAddress, fromBalance-amount)
 	s.Set("balance:"+toAddress, toBalance+amount)
 	//
-	receipt.Status = 1
+	c.Status = 1
 	event := make([]string, 3)
 	event[0] = fromAddress
 	event[1] = toAddress
 	event[2] = r.Amount
-	receipt.Events = append(receipt.Events, model.Event{
+	c.Event = model.Event{
 		Name: name,
 		Id:   "transfer",
 		Data: event,
-	})
+	}
 }

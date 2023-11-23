@@ -1,41 +1,46 @@
 package db
 
-import "gorm.io/gorm"
-
-type Brc20Transaction struct {
-	gorm.Model    `json:"-"`
-	Hash          string `json:"hash"`
-	InscriptionId string `json:"inscription_id"`
-	ContentLength uint64 `json:"content_length"`
-	ContentType   string `json:"content_type"`
-	Content       []byte `json:"content"`
-	Timestamp     uint64 `json:"timestamp"`
-	Height        uint64 `json:"height"`
+type Sync struct {
+	Id           int64 `gorm:"primaryKey;autoIncrement"`
+	SyncHeight   int64
+	CommitHeight int64
 }
 
-type Brc20Receipt struct {
-	gorm.Model    `json:"-"`
-	Hash          string `json:"hash"`
-	InscriptionId string `json:"inscription_id"`
-	Status        int    `json:"status"`
-	Msg           string `json:"msg"`
-	//Events        []Brc20Event `gorm:"foreignKey:ID" json:"events"`
+type Transaction struct {
+	Hash          string `gorm:"primaryKey"`
+	N             int    `gorm:"primaryKey"`
+	InscriptionId string `gorm:"primaryKey"`
+	Timestamp     int64
+	Height        int64
+	Receipts      []Receipt `gorm:"foreignKey:Hash,N,InscriptionId;references:Hash,N,InscriptionId"`
 }
 
-type Brc20Event struct {
-	gorm.Model    `json:"-"`
-	Brc20         string
-	InscriptionId string
-	Data1         string
-	Data2         string
-	Data3         string
-	Data4         string
-	Data5         string
+type Inscription struct {
+	InscriptionId     string `gorm:"primaryKey"`
+	ContentLength     uint64
+	ContentType       string
+	Content           []byte
+	InscriptionNumber int64
+	Owner             string
+}
+
+type Receipt struct {
+	Hash          string `gorm:"primaryKey"`
+	N             int    `gorm:"primaryKey"`
+	InscriptionId string `gorm:"primaryKey"`
+	Status        int
+	Msg           string
+	// event
+	Data1 string
+	Data2 string
+	Data3 string
+	Data4 string
+	Data5 string
+	//Transaction Transaction `gorm:"foreignKey:hash,n,inscription_id;references:hash,n,inscription_id"`
 }
 
 type Brc20Info struct {
-	gorm.Model  `json:"-"`
-	Name        string
+	Name        string `gorm:"primaryKey"`
 	Maximum     int64
 	Limit       int64
 	Decimal     int64
@@ -43,14 +48,7 @@ type Brc20Info struct {
 }
 
 type Brc20Balance struct {
-	gorm.Model `json:"-"`
-	Name       string
-	Address    string
-	Balance    int64
-}
-
-type Inscription struct {
-	gorm.Model `json:"-"`
-	Name       string
-	Proto      string
+	Name    string `gorm:"primaryKey"`
+	Address string `gorm:"primaryKey"`
+	Balance int64
 }

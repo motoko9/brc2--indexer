@@ -5,23 +5,22 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/motoko9/model"
 	"github.com/motoko9/ord"
-	"strings"
 	"time"
 )
 
 type Callback interface {
-	OnTransactions(height uint64, txs []*model.Transaction) error
+	OnTransactions(height int64, txs []*model.Transaction) error
 }
 
 type Syncer struct {
 	ordClient *ord.Client
 	btcClient *rpcclient.Client
-	height    uint64
+	height    int64
 	cb        Callback
 	log       hclog.Logger
 }
 
-func New(ordClient *ord.Client, btcClient *rpcclient.Client, height uint64, cb Callback, log hclog.Logger) *Syncer {
+func New(ordClient *ord.Client, btcClient *rpcclient.Client, height int64, cb Callback, log hclog.Logger) *Syncer {
 	i := &Syncer{
 		ordClient: ordClient,
 		btcClient: btcClient,
@@ -37,6 +36,85 @@ func (syncer *Syncer) Start() {
 }
 
 func (syncer *Syncer) sync() bool {
+	latestHeight, err := syncer.btcClient.GetBlockCount()
+	if err != nil {
+		syncer.log.Error("btcClient.GetBlockCount", "error", err)
+		return false
+	}
+	syncer.log.Info("sync", "latest height", latestHeight, "sync height", syncer.height)
+	for syncer.height < latestHeight {
+		syncer.log.Info("sync", "height", syncer.height)
+		//
+		txs := make([]*model.Transaction, 0)
+		blockHash, err := syncer.btcClient.GetBlockHash(syncer.height)
+		if err != nil {
+			syncer.log.Error("btcClient.GetBlockHash", "error", err)
+			return false
+		}
+		block, err := syncer.btcClient.GetBlock(blockHash)
+		if err != nil {
+			syncer.log.Error("btcClient.GetBlock", "error", err)
+			return false
+		}
+		syncer.log.Info("scan transactions in block", "size", len(block.Transactions))
+		for i, tx := range block.Transactions {
+			syncer.log.Info("xxx", "i", i)
+			for n, _ := range tx.TxOut {
+				output, err := syncer.ordClient.Output(tx.TxHash().String(), n)
+				if err != nil {
+					syncer.log.Error("ordClient.Output", "error", err)
+					return false
+				}
+				for _, inscriptionId := range output.Inscriptions {
+					inscription, err := syncer.ordClient.InscriptionById(inscriptionId)
+					if err != nil {
+						syncer.log.Error("ordClient.InscriptionById", "error", err)
+						return false
+					}
+					content, err := syncer.ordClient.InscriptionContent(inscriptionId)
+					if err != nil {
+						syncer.log.Error("ordClient.InscriptionContent", "error", err)
+						return false
+					}
+					txs = append(txs, &model.Transaction{
+						Output: model.Output{
+							Hash:    tx.TxHash().String(),
+							N:       int64(n),
+							Address: output.Address,
+							Value:   output.Value,
+						},
+						Inscription: model.Inscription{
+							Address:           inscription.Address,
+							ContentLength:     inscription.ContentLength,
+							ContentType:       inscription.ContentType,
+							Content:           content,
+							GenesisFee:        0,
+							GenesisHeight:     0,
+							InscriptionId:     inscription.InscriptionId,
+							InscriptionNumber: inscription.InscriptionNumber,
+							OutputValue:       inscription.OutputValue,
+							SatPoint:          inscription.SatPoint,
+							Timestamp:         inscription.Timestamp,
+						},
+					})
+				}
+			}
+		}
+		//
+		if syncer.cb != nil {
+			if err := syncer.cb.OnTransactions(syncer.height, txs); err != nil {
+				syncer.log.Error("cb.OnTransactions", "error", err)
+				return false
+			}
+		}
+		//
+		syncer.height++
+	}
+	return true
+}
+
+/*
+func (syncer *Syncer) sync1() bool {
 	latestHeight, err := syncer.ordClient.BlockHeight()
 	if err != nil {
 		syncer.log.Error("ordClient.BlockHeight", "error", err)
@@ -124,6 +202,7 @@ func (syncer *Syncer) sync() bool {
 	}
 	return true
 }
+*/
 
 func (syncer *Syncer) process() {
 	process := func() (exit bool) {
@@ -151,6 +230,6 @@ func (syncer *Syncer) process() {
 	}
 }
 
-func (syncer *Syncer) Height() uint64 {
+func (syncer *Syncer) Height() int64 {
 	return syncer.height
 }

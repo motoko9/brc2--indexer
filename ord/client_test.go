@@ -54,10 +54,3 @@ func TestClient_InscriptionContent(t *testing.T) {
 	assert.NoError(t, err)
 	fmt.Printf("content: %v\n", string(content))
 }
-
-func TestClient_Tx(t *testing.T) {
-	c := New("http://localhost:80")
-	_, err := c.Tx("d6a05a03ea525fe08e3f2db71ed3adf276d657970964076761de1b42a7caede1")
-	assert.NoError(t, err)
-	//fmt.Printf("content: %v\n", string(content))
-}

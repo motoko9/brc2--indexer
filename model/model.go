@@ -27,25 +27,16 @@ type Inscription struct {
 	Timestamp         uint64 `json:"timestamp"`
 }
 
-type Input struct {
+type Output struct {
 	Hash    string
 	N       int64
 	Address string
-	Value   int64
-}
-
-type Output struct {
-	N       int64
-	Address string
-	Value   int64
+	Value   uint64
 }
 
 type Transaction struct {
-	Hash          string `json:"hash"`
-	InscriptionId string `json:"inscription_id"`
-	Input         Input  `json:"from"`
-	Output        Output `json:"to"`
-	Inscription   Inscription
+	Output      Output
+	Inscription Inscription
 }
 
 type Event struct {
@@ -54,10 +45,11 @@ type Event struct {
 	Data []string
 }
 
-type Receipt struct {
-	Hash          string  `json:"hash"`
-	InscriptionId string  `json:"inscription_id"`
-	Status        int     `json:"status"`
-	Msg           string  `json:"msg"`
-	Events        []Event `json:"events"`
+type Context struct {
+	Output      Output      `json:"output"`
+	Inscription Inscription `json:"inscription"`
+	Content     Content
+	Status      int    `json:"status"`
+	Msg         string `json:"msg"`
+	Event       Event  `json:"events"`
 }

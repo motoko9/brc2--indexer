@@ -13,18 +13,8 @@ type Inscription struct {
 	Timestamp         uint64 `json:"timestamp"`
 }
 
-type Input struct {
-	Id string
-}
-
 type Output struct {
-	Id      string
-	Value   string
-	Address string
-}
-
-type Transaction struct {
-	Hash    string   `json:"hash"`
-	Inputs  []Input  `json:"input"`
-	Outputs []Output `json:"output"`
+	Value        uint64   `json:"value"`
+	Address      string   `json:"address"`
+	Inscriptions []string `json:"inscriptions"`
 }

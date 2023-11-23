@@ -1,13 +1,10 @@
 package ord
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
-	"strings"
 )
 
 type Client struct {
@@ -241,6 +238,37 @@ func (c *Client) InscriptionContent(id string) ([]byte, error) {
 	return rspJson, nil
 }
 
+func (c *Client) Output(txhash string, n int) (*Output, error) {
+	client := &http.Client{}
+	url := fmt.Sprintf("%s/output/%s:%d", c.url, txhash, n)
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	httpRsp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer httpRsp.Body.Close()
+
+	if httpRsp.StatusCode != 200 {
+		return nil, fmt.Errorf("http response code %d", httpRsp.StatusCode)
+	}
+	rspJson, err := ioutil.ReadAll(httpRsp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var output Output
+	err = json.Unmarshal(rspJson, &output)
+	if err != nil {
+		return nil, err
+	}
+	return &output, nil
+}
+
+/*
 func (c *Client) Tx(hash string) (*Transaction, error) {
 	client := &http.Client{}
 	url := fmt.Sprintf("%s/tx/%s", c.url, hash)
@@ -353,3 +381,4 @@ func findNode(node *html.Node, data string) *html.Node {
 	}
 	return nil
 }
+*/
