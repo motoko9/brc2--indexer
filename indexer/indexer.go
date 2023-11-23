@@ -102,7 +102,7 @@ func (indexer *Indexer) Service() {
 	indexer.APIRoutes(rootPath)
 
 	// setup listener
-	ln, err := net.Listen("tcp", ":8080")
+	ln, err := net.Listen("tcp", ":8089")
 	if err != nil {
 		return
 	}
