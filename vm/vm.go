@@ -46,6 +46,11 @@ func (v *Vm) Execute(s *state.State, transaction *model.Transaction) *model.Cont
 		Content:     r,
 		Status:      0,
 		Msg:         "",
+		Event: model.Event{
+			Name: "",
+			Id:   "",
+			Data: make([]string, 3),
+		},
 	}
 	v.ExecuteBrc20(c, s)
 	return c
@@ -126,15 +131,11 @@ func (v *Vm) handleBrc20Deploy(c *model.Context, s *state.State) {
 	s.Set("info:total_supply", int64(0))
 	//
 	c.Status = 1
-	event := make([]string, 3)
-	event[0] = r.Decimal
-	event[1] = r.Maximum
-	event[2] = r.Limit
-	c.Event = model.Event{
-		Name: name,
-		Id:   "deploy",
-		Data: event,
-	}
+	c.Event.Name = name
+	c.Event.Id = "deploy"
+	c.Event.Data[0] = r.Decimal
+	c.Event.Data[1] = r.Maximum
+	c.Event.Data[2] = r.Limit
 }
 
 func (v *Vm) handleBrc20Mint(c *model.Context, s *state.State) {
@@ -186,15 +187,11 @@ func (v *Vm) handleBrc20Mint(c *model.Context, s *state.State) {
 	s.Set("balance:"+output.Address, balance+amount)
 	//
 	c.Status = 1
-	event := make([]string, 3)
-	event[0] = output.Address
-	event[1] = output.Address
-	event[2] = r.Amount
-	c.Event = model.Event{
-		Name: name,
-		Id:   "transfer",
-		Data: event,
-	}
+	c.Event.Name = name
+	c.Event.Id = "transfer"
+	c.Event.Data[0] = output.Address
+	c.Event.Data[1] = output.Address
+	c.Event.Data[2] = r.Amount
 }
 
 func (v *Vm) handleBrc20Transfer(c *model.Context, s *state.State) {
@@ -264,13 +261,9 @@ func (v *Vm) handleBrc20TransferStep2(c *model.Context, s *state.State) {
 	s.Set("balance:"+toAddress, toBalance+amount)
 	//
 	c.Status = 1
-	event := make([]string, 3)
-	event[0] = fromAddress
-	event[1] = toAddress
-	event[2] = r.Amount
-	c.Event = model.Event{
-		Name: name,
-		Id:   "transfer",
-		Data: event,
-	}
+	c.Event.Name = name
+	c.Event.Id = "transfer"
+	c.Event.Data[0] = fromAddress
+	c.Event.Data[1] = toAddress
+	c.Event.Data[2] = r.Amount
 }

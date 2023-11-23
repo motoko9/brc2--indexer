@@ -57,8 +57,7 @@ func (syncer *Syncer) sync() bool {
 			return false
 		}
 		syncer.log.Info("scan transactions in block", "size", len(block.Transactions))
-		for i, tx := range block.Transactions {
-			syncer.log.Info("xxx", "i", i)
+		for _, tx := range block.Transactions {
 			for n, _ := range tx.TxOut {
 				output, err := syncer.ordClient.Output(tx.TxHash().String(), n)
 				if err != nil {

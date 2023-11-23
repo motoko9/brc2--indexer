@@ -37,7 +37,7 @@ func (s *State) HasInscription(inscriptionId string) bool {
 
 func (s *State) CreateInscription(inscriptionId string, contentLength uint64, contentType string, content []byte, owner string) {
 	s.inscriptions[inscriptionId] = &db.Inscription{
-		InscriptionId:     "",
+		InscriptionId:     inscriptionId,
 		ContentLength:     contentLength,
 		ContentType:       contentType,
 		Content:           content,
